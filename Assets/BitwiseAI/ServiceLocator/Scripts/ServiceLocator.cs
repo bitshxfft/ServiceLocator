@@ -6,12 +6,21 @@ namespace BitwiseAI.ServiceLocator
 {
 	public class ServiceLocator : MonoBehaviour
 	{
-		public static ServiceLocator Instance { get; private set; } = null;
+		private enum InitialisationState
+		{
+			Uninitialised,
+			Initialised,
+		}
+
+		// ----------------------------------------------------------------------------
+
+		public static ServiceLocator Instance { get; private set; }
 
 		// ----------------------------------------------------------------------------
 
 		private Dictionary<Type, IService> m_Services = new Dictionary<Type, IService>();
 		private List<IUpdatedService> m_UpdatedServices = new List<IUpdatedService>();
+		private InitialisationState m_InitialisationState = InitialisationState.Uninitialised;
 
 		// ----------------------------------------------------------------------------
 
@@ -26,6 +35,7 @@ namespace BitwiseAI.ServiceLocator
 			{
 				Instance = this;
 				DontDestroyOnLoad(gameObject);
+				m_InitialisationState = InitialisationState.Initialised;
 			}
 		}
 
@@ -56,8 +66,16 @@ namespace BitwiseAI.ServiceLocator
 				Debug.LogError("[ServiceLocator::Register] received null Service");
 				return;
 			}
-
+			
 			var serviceType = service.GetType();
+
+			if (m_InitialisationState != InitialisationState.Initialised)
+			{
+				Debug.LogError($"[ServiceLocator::Register] ServiceLocator is not Initialised, did you try to register {serviceType} from Awake?");
+				return;
+			}
+
+			// add service
 			if (false == m_Services.ContainsKey(serviceType))
 			{
 				m_Services.Add(serviceType, service);
@@ -68,6 +86,7 @@ namespace BitwiseAI.ServiceLocator
 				Debug.LogError($"[ServiceLocator::Register] Service already registered: {serviceType}");
 			}
 
+			// add updated service reference
 			if (service is IUpdatedService updatedService)
 			{
 				m_UpdatedServices.Add(updatedService);
@@ -84,6 +103,12 @@ namespace BitwiseAI.ServiceLocator
 			}
 
 			Type serviceType = service.GetType();
+			
+			if (m_InitialisationState != InitialisationState.Initialised)
+			{
+				Debug.LogError($"[ServiceLocator::Unregister] ServiceLocator is not Initialised, did you try to unregister {serviceType} from Awake?");
+				return;
+			}
 
 			// remove service
 			if (m_Services.Remove(serviceType))
