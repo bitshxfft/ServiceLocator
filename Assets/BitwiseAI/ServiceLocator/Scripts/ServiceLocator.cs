@@ -19,7 +19,7 @@ namespace BitwiseAI.ServiceLocator
 		{
 			if (null != Instance)
 			{
-				Debug.LogError("[BitwiseAI.ServiceLocator.ServiceLocator::Awake] Multiple ServiceLocator instances");
+				Debug.LogError("[ServiceLocator::Awake] Multiple ServiceLocator instances");
 				DestroyImmediate(gameObject);
 			}
 			else
@@ -32,34 +32,28 @@ namespace BitwiseAI.ServiceLocator
 		private void Start()
 		{
 			var services = GetComponents<IService>();
-			for (int i = 0; i < services.Length; ++i)
+			foreach (IService service in services)
 			{
-				AddService(services[i]);
-			}
-
-			var updatedServices = GetComponents<IUpdatedService>();
-			for (int i = 0; i < updatedServices.Length; ++i)
-			{
-				AddUpdatedService(updatedServices[i]);
+				Register(service);
 			}
 		}
 
 		private void Update()
 		{
 			var timeData = new TimeData(Time.deltaTime, Time.time, Time.frameCount);
-			for (int i = 0; i < m_UpdatedServices.Count; ++i)
+			foreach (IUpdatedService service in m_UpdatedServices)
 			{
-				m_UpdatedServices[i].OnUpdate(in timeData);
+				service.OnUpdate(in timeData);
 			}
 		}
 
 		// ----------------------------------------------------------------------------
 
-		private void AddService(IService service)
+		public void Register(IService service)
 		{
 			if (null == service)
 			{
-				Debug.LogError("[BitwiseAI.ServiceLocator.ServiceLocator::AddService] received null IService");
+				Debug.LogError("[ServiceLocator::Register] received null Service");
 				return;
 			}
 
@@ -67,48 +61,64 @@ namespace BitwiseAI.ServiceLocator
 			if (false == m_Services.ContainsKey(serviceType))
 			{
 				m_Services.Add(serviceType, service);
-				Debug.Log($"[BitwiseAI.ServiceLocator.ServiceLocator::AddService] Added Service: {serviceType}");
+				Debug.Log($"[ServiceLocator::Register] Added Service: {serviceType}");
 			}
 			else
 			{
-				Debug.LogError($"[BitwiseAI.ServiceLocator.ServiceLocator::AddService] received duplicate Service: {serviceType}");
+				Debug.LogError($"[ServiceLocator::Register] Service already registered: {serviceType}");
+			}
+
+			if (service is IUpdatedService updatedService)
+			{
+				m_UpdatedServices.Add(updatedService);
+				Debug.Log($"[ServiceLocator::Register] Added Updated Service: {updatedService.GetType()}");
 			}
 		}
 
-		private void AddUpdatedService(IUpdatedService updatedService)
+		public void Unregister(IService service)
 		{
-			if (null == updatedService)
+			if (null == service)
 			{
-				Debug.LogError("[BitwiseAI.ServiceLocator.ServiceLocator::AddUpdatedService] received null IUpdatedService");
+				Debug.LogError("[ServiceLocator::Unregister] received null Service");
 				return;
 			}
 
-			m_UpdatedServices.Add(updatedService);
-			Debug.Log($"[BitwiseAI.ServiceLocator.ServiceLocator::AddUpdatedService] Added Updated Service: {updatedService.GetType()}");
-		}
+			Type serviceType = service.GetType();
 
-		// ----------------------------------------------------------------------------
-
-		public void RegisterService(IService service)
-		{
-			AddService(service);
-		}
-
-		public void RegisterUpdatedService(IUpdatedService updatedService)
-		{
-			AddService(updatedService);
-			AddUpdatedService(updatedService);
-		}
-
-		public TService GetService<TService>()
-		{
-			if (m_Services.TryGetValue(typeof(TService), out var service))
+			// remove service
+			if (m_Services.Remove(serviceType))
 			{
-				return (TService) service;
+				Debug.Log($"[ServiceLocator::Unregister] Removed Service: {serviceType}");
 			}
 			else
 			{
-				Debug.LogError($"[BitwiseAI.ServiceLocator.ServiceLocator::GetService] Failed to find Service: {typeof(TService)}");
+				Debug.LogError($"[ServiceLocator::Unregister] Service not registered: {serviceType}");
+			}
+
+			// remove updated service reference
+			if (service is IUpdatedService updatedService)
+			{
+				if (m_UpdatedServices.Remove(updatedService))
+				{
+					Debug.Log($"[ServiceLocator::Unregister] Removed Updated Service: {serviceType}");
+				}
+				else
+				{
+					Debug.LogError($"[ServiceLocator::Unregister] Failed to remove Updated Service: {serviceType}");
+				}
+			}
+		}
+
+		public TService Get<TService>() where TService : IService
+		{
+			var serviceType = typeof(TService);
+			if (m_Services.TryGetValue(serviceType, out IService service))
+			{
+				return (TService)service;
+			}
+			else
+			{
+				Debug.LogError($"[ServiceLocator::Get] Failed to find Service: {serviceType}");
 				return default;
 			}
 		}
